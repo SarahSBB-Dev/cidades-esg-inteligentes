@@ -1,0 +1,117 @@
+name: CI/CD - Cidades ESG Inteligentes
+
+# Fluxo de branches: feature/* -> develop (staging) -> main (produção)
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+
+env:
+  # Nomes dos Aplicativos Web criados no Azure (um para cada ambiente)
+  AZURE_WEBAPP_STAGING: 'cidades-esg-stg-rm563780'
+  AZURE_WEBAPP_PRODUCAO: 'cidades-esg-prd-rm563780'
+  # Nome do repositório da imagem no Docker Hub
+  IMAGE_NAME: 'cidades-esg-inteligentes'
+
+jobs:
+  # ETAPA 1 - Build automático + testes automatizados
+  build-test:
+    name: Build e testes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java SDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Testes automatizados
+        run: mvn -B test
+
+      - name: Build do projeto (gera o app.jar)
+        run: mvn -B package -DskipTests
+
+  # ETAPA 2 - Build da imagem Docker e envio para o Docker Hub
+  docker:
+    name: Build e push da imagem Docker
+    needs: build-test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push container image to registry
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          file: ./Dockerfile
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+
+  # ETAPA 3 - Deploy automático no ambiente de STAGING (Azure Web App)
+  deploy-staging:
+    name: Deploy em staging
+    needs: docker
+    runs-on: ubuntu-latest
+    environment:
+      name: 'staging'
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Azure Web App (staging)
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_STAGING }}
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE_STAGING }}
+          images: 'index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}'
+
+      - name: Verificar se o ambiente de staging está no ar
+        run: bash scripts/verificar-ambiente.sh "${{ steps.deploy-to-webapp.outputs.webapp-url }}" stg
+
+  # ETAPA 4 - Deploy no ambiente de PRODUÇÃO (somente na branch main e se staging deu certo)
+  deploy-producao:
+    name: Deploy em produção
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: 'production'
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Azure Web App (produção)
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_PRODUCAO }}
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE_PRODUCAO }}
+          images: 'index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}'
+
+      - name: Verificar se o ambiente de produção está no ar
+        run: bash scripts/verificar-ambiente.sh "${{ steps.deploy-to-webapp.outputs.webapp-url }}" prd

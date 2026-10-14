@@ -1,0 +1,42 @@
+services:
+  db: # Serviço de banco de dados
+    container_name: esg-mysql
+    image: mysql:8.0 # Imagem oficial do MySQL
+    ports:
+      - "3306:3306" # Expõe a porta padrão do MySQL
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD} # Senha do usuário root (vem do arquivo .env)
+      MYSQL_DATABASE: ${DB_NAME}               # Cria o banco de dados da aplicação
+    volumes:
+      - db_data:/var/lib/mysql # Volume para persistir os dados do banco
+    networks:
+      - esg-network
+    healthcheck: # Verifica se o banco está pronto antes de subir a API
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api: # Serviço da aplicação
+    container_name: esg-api
+    build: . # Usa o Dockerfile no diretório atual
+    image: cidades-esg-inteligentes:local
+    ports:
+      - "8080:8080" # Mapeia a porta da aplicação
+    depends_on: # Aguarda o banco de dados estar saudável
+      db:
+        condition: service_healthy
+    environment:
+      - PROFILE=${PROFILE} # Define o perfil da aplicação (dev, stg ou prd)
+      - DATABASE_URL=jdbc:mysql://db:3306/${DB_NAME}?createDatabaseIfNotExist=true # URL de conexão com o banco
+      - DATABASE_USER=root # Usuário do banco
+      - DATABASE_PWD=${DB_ROOT_PASSWORD} # Senha do banco
+    networks:
+      - esg-network
+
+networks: # Rede interna: a API acessa o banco pelo nome do serviço "db"
+  esg-network:
+    driver: bridge
+
+volumes: # Volume nomeado para persistência dos dados do banco
+  db_data:
