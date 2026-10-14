@@ -14,8 +14,8 @@ on:
 
 env:
   # Nomes dos Aplicativos Web criados no Azure (um para cada ambiente)
-  AZURE_WEBAPP_STAGING: 'cidades-esg-stg-rm563780'
-  AZURE_WEBAPP_PRODUCAO: 'cidades-esg-prd-rm563780'
+  AZURE_WEBAPP_STAGING: 'cidades-esg-inteligentes-staging'
+  AZURE_WEBAPP_PRODUCAO: 'cidades-esg-inteligentes-producao'
   # Nome do repositório da imagem no Docker Hub
   IMAGE_NAME: 'cidades-esg-inteligentes'
 

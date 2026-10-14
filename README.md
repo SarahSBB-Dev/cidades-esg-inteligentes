@@ -4,10 +4,12 @@ API REST em **Java 21 + Spring Boot** para cadastrar e consultar **indicadores E
 
 O foco do projeto é aplicar as práticas de **DevOps** vistas na fase *"Navegando pelo mundo DevOps"*: pipeline de CI/CD com **GitHub Actions**, containerização com **Docker**, orquestração com **Docker Compose** e deploy automatizado em dois ambientes na nuvem **Microsoft Azure** (**staging** e **produção**).
 
-**Integrantes (Grupo 112):**
+**Integrantes:**
 
 | Nome | RM |
 |------|----|
+| Caio Agnello | RM_____ |
+| Giovanna Vasconcelos Egawa | RM_____ |
 | Sarah Schulze Bittar Bonafé | RM563780 |
 
 **Repositório:** https://github.com/SarahSBB-Dev/cidades-esg-inteligentes
@@ -125,8 +127,8 @@ Para rodar só os testes automatizados (precisa do JDK 21 e do Maven): `mvn test
 
 | Ambiente | Aplicativo Web | Variáveis de ambiente |
 |----------|----------------|-----------------------|
-| Staging | `cidades-esg-stg-rm563780` | `PROFILE=stg`, `WEBSITES_PORT=8080` |
-| Produção | `cidades-esg-prd-rm563780` | `PROFILE=prd`, `WEBSITES_PORT=8080` |
+| Staging | `cidades-esg-inteligentes-staging` | `PROFILE=stg`, `WEBSITES_PORT=8080` |
+| Produção | `cidades-esg-inteligentes-producao` | `PROFILE=prd`, `WEBSITES_PORT=8080` |
 
 ## Containerização
 
