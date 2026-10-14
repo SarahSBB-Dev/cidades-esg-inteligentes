@@ -19,8 +19,8 @@ services:
 
   api: # Serviço da aplicação
     container_name: esg-api
-    build: . # Usa o Dockerfile no diretório atual
-    image: cidades-esg-inteligentes:local
+    build: . # Usa o Dockerfile no diretório atual (ambiente local)
+    image: ${APP_IMAGE:-cidades-esg-inteligentes:local} # Nos deploys do pipeline, usa a imagem publicada no Docker Hub
     ports:
       - "8080:8080" # Mapeia a porta da aplicação
     depends_on: # Aguarda o banco de dados estar saudável

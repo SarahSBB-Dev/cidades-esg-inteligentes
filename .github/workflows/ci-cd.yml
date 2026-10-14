@@ -13,9 +13,6 @@ on:
   workflow_dispatch:
 
 env:
-  # Nomes dos Aplicativos Web criados no Azure (um para cada ambiente)
-  AZURE_WEBAPP_STAGING: 'cidades-esg-inteligentes-staging'
-  AZURE_WEBAPP_PRODUCAO: 'cidades-esg-inteligentes-producao'
   # Nome do repositório da imagem no Docker Hub
   IMAGE_NAME: 'cidades-esg-inteligentes'
 
@@ -69,28 +66,52 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
 
-  # ETAPA 3 - Deploy automático no ambiente de STAGING (Azure Web App)
+  # ETAPA 3 - Deploy automático no ambiente de STAGING
   deploy-staging:
     name: Deploy em staging
     needs: docker
     runs-on: ubuntu-latest
     environment:
       name: 'staging'
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
     steps:
       - name: Git Checkout
         uses: actions/checkout@v5
 
-      - name: Deploy to Azure Web App (staging)
-        id: deploy-to-webapp
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_STAGING }}
-          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE_STAGING }}
-          images: 'index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}'
+      - name: Criar o arquivo .env do ambiente
+        run: |
+          echo "PROFILE=stg" > .env
+          echo "DB_NAME=esg_staging" >> .env
+          echo "DB_ROOT_PASSWORD=$(openssl rand -hex 12)" >> .env
+          echo "APP_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" >> .env
 
-      - name: Verificar se o ambiente de staging está no ar
-        run: bash scripts/verificar-ambiente.sh "${{ steps.deploy-to-webapp.outputs.webapp-url }}" stg
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Baixar a imagem publicada no Docker Hub
+        run: docker compose pull
+
+      - name: Subir o ambiente (API + MySQL)
+        run: docker compose up -d --no-build
+
+      - name: Verificar se o ambiente está no ar
+        run: bash scripts/verificar-ambiente.sh http://localhost:8080 stg
+
+      - name: Testar a API no ambiente
+        run: bash scripts/testar-api.sh http://localhost:8080
+
+      - name: Containers em execução
+        run: docker compose ps
+
+      - name: Logs da aplicação
+        if: always()
+        run: docker compose logs api --tail 40
+
+      - name: Encerrar o ambiente
+        if: always()
+        run: docker compose down -v
 
   # ETAPA 4 - Deploy no ambiente de PRODUÇÃO (somente na branch main e se staging deu certo)
   deploy-producao:
@@ -100,18 +121,42 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: 'production'
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
     steps:
       - name: Git Checkout
         uses: actions/checkout@v5
 
-      - name: Deploy to Azure Web App (produção)
-        id: deploy-to-webapp
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_PRODUCAO }}
-          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE_PRODUCAO }}
-          images: 'index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}'
+      - name: Criar o arquivo .env do ambiente
+        run: |
+          echo "PROFILE=prd" > .env
+          echo "DB_NAME=esg_producao" >> .env
+          echo "DB_ROOT_PASSWORD=$(openssl rand -hex 12)" >> .env
+          echo "APP_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" >> .env
 
-      - name: Verificar se o ambiente de produção está no ar
-        run: bash scripts/verificar-ambiente.sh "${{ steps.deploy-to-webapp.outputs.webapp-url }}" prd
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Baixar a imagem publicada no Docker Hub
+        run: docker compose pull
+
+      - name: Subir o ambiente (API + MySQL)
+        run: docker compose up -d --no-build
+
+      - name: Verificar se o ambiente está no ar
+        run: bash scripts/verificar-ambiente.sh http://localhost:8080 prd
+
+      - name: Testar a API no ambiente
+        run: bash scripts/testar-api.sh http://localhost:8080
+
+      - name: Containers em execução
+        run: docker compose ps
+
+      - name: Logs da aplicação
+        if: always()
+        run: docker compose logs api --tail 40
+
+      - name: Encerrar o ambiente
+        if: always()
+        run: docker compose down -v
