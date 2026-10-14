@@ -6,11 +6,9 @@ O foco do projeto é aplicar as práticas de **DevOps** vistas na fase *"Navegan
 
 **Integrantes:**
 
-| Nome | RM |
-|------|----|
-| Caio Agnello | RM563108 |
-| Giovanna Vasconcelos Egawa | RM_____ |
-| Sarah Schulze Bittar Bonafé | RM563780 |
+- Caio Agnello
+- Giovanna Vasconcelos Egawa
+- Sarah Schulze Bittar Bonafé
 
 **Repositório:** https://github.com/SarahSBB-Dev/cidades-esg-inteligentes
 
