@@ -2,7 +2,7 @@
 
 API REST em **Java 21 + Spring Boot** para cadastrar e consultar **indicadores ESG** (Ambiental, Social e Governança) de cidades, como consumo de energia, coleta seletiva, acesso a saneamento ou transparência nos gastos públicos.
 
-O foco do projeto é aplicar as práticas de **DevOps** vistas na fase *"Navegando pelo mundo DevOps"*: pipeline de CI/CD com **GitHub Actions**, containerização com **Docker**, orquestração com **Docker Compose** e deploy automatizado em dois ambientes na nuvem **Microsoft Azure** (**staging** e **produção**).
+O foco do projeto é aplicar as práticas de **DevOps** vistas na fase *"Navegando pelo mundo DevOps"*: pipeline de CI/CD com **GitHub Actions**, containerização com **Docker**, publicação da imagem no **Docker Hub**, orquestração com **Docker Compose** e deploy automatizado em dois ambientes: **staging** e **produção**.
 
 **Integrantes:**
 
@@ -23,7 +23,8 @@ cidades-esg-inteligentes/
 ├── .env.example                       # modelo das variáveis de ambiente do compose
 ├── pom.xml                            # dependências e build (Maven)
 ├── scripts/
-│   └── verificar-ambiente.sh          # verifica se o ambiente publicado está no ar
+│   ├── verificar-ambiente.sh          # verifica se o ambiente está no ar e no profile correto
+│   └── testar-api.sh                  # testa cadastro, listagem, filtro e validação da API
 ├── src/
 │   ├── main/java/br/com/fiap/esg/
 │   │   ├── controller/                # IndicadorEsgController e StatusController
@@ -35,9 +36,9 @@ cidades-esg-inteligentes/
 │   │   └── advice/                    # tratamento global de erros
 │   ├── main/resources/
 │   │   ├── application.properties     # configurações comuns
-│   │   ├── application-dev.properties # profile dev (local, MySQL do compose)
-│   │   ├── application-stg.properties # profile stg (staging no Azure)
-│   │   └── application-prd.properties # profile prd (produção no Azure)
+│   │   ├── application-dev.properties # profile dev (ambiente local)
+│   │   ├── application-stg.properties # profile stg (staging)
+│   │   └── application-prd.properties # profile prd (produção)
 │   └── test/java/br/com/fiap/esg/     # testes automatizados (JUnit 5)
 ├── prints/                            # evidências de funcionamento
 ├── docs/                              # documentação técnica (PDF)
@@ -103,32 +104,36 @@ Para rodar só os testes automatizados (precisa do JDK 21 e do Maven): `mvn test
 |-------------|-------------|-----------|
 | 1. `build-test` - Build e testes | push e pull request em `develop` e `main` | Configura o Java 21, executa os **testes automatizados** (`mvn test`) e gera o `app.jar` (`mvn package`) |
 | 2. `docker` - Build e push da imagem | push em `develop` e `main` | Constrói a imagem a partir do `Dockerfile` e envia ao **Docker Hub** com as tags `<sha do commit>` e `latest` |
-| 3. `deploy-staging` - Deploy em staging | após a etapa 2 | Publica a imagem no Aplicativo Web de **staging** no Azure e roda `scripts/verificar-ambiente.sh` |
-| 4. `deploy-producao` - Deploy em produção | após a etapa 3, **somente na `main`** | Publica **a mesma imagem** no Aplicativo Web de **produção** e verifica se está no ar |
+| 3. `deploy-staging` - Deploy em staging | após a etapa 2 | Implanta a imagem publicada no environment **staging** (API + MySQL com Docker Compose, `PROFILE=stg`), verifica o ambiente e testa a API |
+| 4. `deploy-producao` - Deploy em produção | após a etapa 3, **somente na `main`** | Implanta **a mesma imagem** no environment **production** (`PROFILE=prd`), verifica o ambiente e testa a API |
 
 **Funcionamento:**
 
 - Cada etapa depende da anterior (`needs`). Se os testes falharem, nenhuma imagem é gerada. Se o deploy em staging falhar, a produção não é atualizada.
-- O deploy usa a action `azure/webapps-deploy` com o **perfil de publicação** de cada Aplicativo Web, guardado nos *secrets* do GitHub.
-- Os jobs de deploy usam os **environments** `staging` e `production` do GitHub, que registram cada implantação e mostram o link do ambiente.
-- A diferença entre os ambientes está só nas **variáveis de ambiente** configuradas em cada Aplicativo Web do Azure: `PROFILE=stg` ou `PROFILE=prd`.
-- Depois de cada deploy, o script `verificar-ambiente.sh` acessa `/api/status` até a aplicação responder com o ambiente correto. Isso confirma que a nova versão subiu.
+- Os jobs de deploy usam os **environments** `staging` e `production` do GitHub, que registram cada implantação na página *Deployments* do repositório.
+- Em cada deploy, o pipeline:
+  1. cria o arquivo `.env` do ambiente (profile, nome do banco, senha gerada na hora e imagem a implantar);
+  2. faz login no Docker Hub e baixa a imagem publicada na etapa 2 (`docker compose pull`);
+  3. sobe a API e o MySQL com o `docker-compose.yml` do projeto (`docker compose up -d`), com volume, rede e variáveis de ambiente;
+  4. roda `scripts/verificar-ambiente.sh`, que espera `/api/status` responder com o profile do ambiente (`stg` ou `prd`);
+  5. roda `scripts/testar-api.sh`, que cadastra um indicador de cada pilar ESG, confere que dados inválidos são recusados (HTTP 400) e lista os indicadores;
+  6. mostra os containers (`docker compose ps`) e os logs da aplicação, e encerra o ambiente.
+- Staging e produção recebem **exatamente a mesma imagem** (tag com o SHA do commit). Entre os ambientes mudam só as variáveis de ambiente.
 
 **Secrets configurados no repositório** (Settings → Secrets and variables → Actions):
 
 | Secret | Uso |
 |--------|-----|
 | `DOCKERHUB_USERNAME` | usuário do Docker Hub |
-| `DOCKERHUB_TOKEN` | token de acesso do Docker Hub |
-| `AZURE_PUBLISH_PROFILE_STAGING` | perfil de publicação do Aplicativo Web de staging |
-| `AZURE_PUBLISH_PROFILE_PRODUCAO` | perfil de publicação do Aplicativo Web de produção |
+| `DOCKERHUB_TOKEN` | token de acesso do Docker Hub (Read & Write) |
 
-**Ambientes no Azure** (Serviços de Aplicativos, plano Básico B1, Linux, contêiner Docker):
+**Ambientes:**
 
-| Ambiente | Aplicativo Web | Variáveis de ambiente |
-|----------|----------------|-----------------------|
-| Staging | `cidades-esg-inteligentes-staging` | `PROFILE=stg`, `WEBSITES_PORT=8080` |
-| Produção | `cidades-esg-inteligentes-producao` | `PROFILE=prd`, `WEBSITES_PORT=8080` |
+| Ambiente | Environment no GitHub | Profile | Banco |
+|----------|-----------------------|---------|-------|
+| Local | - | `dev` | MySQL `esg` |
+| Staging | `staging` | `stg` | MySQL `esg_staging` |
+| Produção | `production` | `prd` | MySQL `esg_producao` |
 
 ## Containerização
 
@@ -158,24 +163,17 @@ ENTRYPOINT ["sh", "-c", "java -Dspring.profiles.active=$PROFILE -jar app.jar"]
 - **Profile por variável de ambiente:** a variável `PROFILE` define o profile do Spring (`dev`, `stg` ou `prd`). A mesma imagem roda em qualquer ambiente, mudando apenas a configuração.
 - **`.dockerignore`:** evita copiar para a imagem arquivos desnecessários, como `target/`, `.git/`, `.env`, prints e documentação.
 - **Testes fora da imagem:** os testes rodam no job de CI. Por isso o build da imagem usa `-DskipTests`.
+- **Imagem versionada:** cada imagem publicada recebe a tag com o SHA do commit, então dá para saber exatamente qual versão está em cada ambiente.
 
 **Orquestração com Docker Compose (`docker-compose.yml`):**
 
 - **Serviços:** `api` (aplicação Spring Boot, construída pelo Dockerfile) e `db` (MySQL 8.0).
 - **Volume:** `db_data`, que guarda os dados do MySQL mesmo se o container for recriado.
 - **Rede:** `esg-network` (bridge). A API acessa o banco pelo nome do serviço: `jdbc:mysql://db:3306/...`.
-- **Variáveis de ambiente:** vêm do arquivo `.env` (modelo em `.env.example`): `PROFILE`, `DB_NAME` e `DB_ROOT_PASSWORD`. A API recebe `DATABASE_URL`, `DATABASE_USER` e `DATABASE_PWD`.
+- **Variáveis de ambiente:** vêm do arquivo `.env` (modelo em `.env.example`): `PROFILE`, `DB_NAME`, `DB_ROOT_PASSWORD` e `APP_IMAGE`. A API recebe `DATABASE_URL`, `DATABASE_USER` e `DATABASE_PWD`.
 - **Healthcheck:** o MySQL é verificado com `mysqladmin ping`. A API só sobe depois que o banco está saudável (`depends_on` com `condition: service_healthy`).
 
-**Banco de dados por ambiente:**
-
-| Profile | Onde roda | Banco |
-|---------|-----------|-------|
-| `dev` | Docker Compose local | MySQL 8.0 (container `db`) |
-| `stg` | Azure - staging | H2 em memória (ou o banco informado na variável `DATABASE_URL`) |
-| `prd` | Azure - produção | H2 em memória (ou o banco informado na variável `DATABASE_URL`) |
-
-Nos ambientes do Azure usamos um banco em memória para não gerar custo extra na conta de estudante. Com isso, os dados são apagados quando o Aplicativo Web reinicia. Para manter os dados, basta criar um banco gerenciado e configurar `DATABASE_URL`, `DATABASE_USER` e `DATABASE_PWD` no Azure, sem alterar o código.
+**Mesma orquestração em todos os ambientes:** o `docker-compose.yml` é usado localmente e nos deploys de staging e produção. Localmente, a imagem da API é construída pelo Dockerfile (`build: .`). Nos deploys, a variável `APP_IMAGE` aponta para a imagem publicada no Docker Hub.
 
 ## Prints do funcionamento
 
@@ -186,13 +184,13 @@ _(prints adicionados após a execução do pipeline)_
 ## Tecnologias utilizadas
 
 - **Linguagem e framework:** Java 21, Spring Boot 3.3 (Spring Web, Spring Data JPA, Bean Validation)
-- **Banco de dados:** MySQL 8.0 (local, via Docker Compose) e H2 (ambientes no Azure)
+- **Banco de dados:** MySQL 8.0 (via Docker Compose em todos os ambientes)
 - **Testes:** JUnit 5 (`spring-boot-starter-test`)
 - **Build:** Maven
 - **Containerização e orquestração:** Docker e Docker Compose
 - **Registro de imagens:** Docker Hub
 - **CI/CD:** GitHub Actions (com environments `staging` e `production`)
-- **Nuvem:** Microsoft Azure - Serviços de Aplicativos (Aplicativo Web para contêineres)
+- **Scripts:** Bash + curl (verificação do ambiente e teste da API)
 - **Versionamento:** Git e GitHub
 
 ## Checklist de entrega
