@@ -179,7 +179,67 @@ ENTRYPOINT ["sh", "-c", "java -Dspring.profiles.active=$PROFILE -jar app.jar"]
 
 As evidências ficam na pasta [`prints/`](prints/) e também estão na documentação em PDF (pasta [`docs/`](docs/)).
 
-_(prints adicionados após a execução do pipeline)_
+Execuções do pipeline: https://github.com/SarahSBB-Dev/cidades-esg-inteligentes/actions
+
+### Pipeline
+
+**Execução completa do pipeline na branch `main`: build e testes, imagem Docker, deploy em staging e deploy em produção**
+
+![Execução completa do pipeline na branch main: build e testes, imagem Docker, deploy em staging e deploy em produção](prints/01-pipeline-sucesso.png)
+
+**Push na branch `develop`: o pipeline publica só em staging (produção é pulada)**
+
+![Push na branch develop: o pipeline publica só em staging (produção é pulada)](prints/14-pipeline-develop.png)
+
+**Job "Build e testes"**
+
+![Job Build e testes](prints/02-job-build-testes.png)
+
+**Testes automatizados (`mvn test`): Tests run: 8, Failures: 0, Errors: 0 - BUILD SUCCESS**
+
+![Testes automatizados (mvn test): Tests run: 8, Failures: 0, Errors: 0 - BUILD SUCCESS](prints/03-testes-log.png)
+
+**Job "Build e push da imagem Docker"**
+
+![Job Build e push da imagem Docker](prints/04-job-docker.png)
+
+**Imagem publicada no Docker Hub com a tag do commit e a tag `latest`**
+
+![Imagem publicada no Docker Hub com a tag do commit e a tag latest](prints/05-dockerhub.png)
+
+**Job "Deploy em staging"**
+
+![Job Deploy em staging](prints/06-job-deploy-staging.png)
+
+**Job "Deploy em produção"**
+
+![Job Deploy em produção](prints/07-job-deploy-producao.png)
+
+**Environments `staging` e `production` com o histórico de deploys**
+
+![Environments staging e production com o histórico de deploys](prints/08-environments.png)
+
+### Ambientes staging e produção funcionando
+
+**Staging: `/api/status` responde com `"ambiente":"stg"`**
+
+![Staging: /api/status responde com ambiente:stg](prints/09-staging-status.png)
+
+**Staging: cadastros (HTTP 201), validação de dados inválidos (HTTP 400) e listagem dos indicadores**
+
+![Staging: cadastros (HTTP 201), validação de dados inválidos (HTTP 400) e listagem dos indicadores](prints/10-staging-api.png)
+
+**Produção: `/api/status` responde com `"ambiente":"prd"`**
+
+![Produção: /api/status responde com ambiente:prd](prints/11-producao-status.png)
+
+**Produção: cadastros (HTTP 201), validação de dados inválidos (HTTP 400) e listagem dos indicadores**
+
+![Produção: cadastros (HTTP 201), validação de dados inválidos (HTTP 400) e listagem dos indicadores](prints/12-producao-api.png)
+
+**Containers da API e do MySQL (healthy) em execução no ambiente (`docker compose ps`)**
+
+![Containers da API e do MySQL (healthy) em execução no ambiente (docker compose ps)](prints/13-containers.png)
 
 ## Tecnologias utilizadas
 
@@ -197,10 +257,10 @@ _(prints adicionados após a execução do pipeline)_
 
 | Item | OK |
 |------|----|
-| Projeto compactado em .ZIP com estrutura organizada | ☐ |
-| Dockerfile funcional | ☐ |
-| docker-compose.yml ou arquivos Kubernetes | ☐ |
-| Pipeline com etapas de build, teste e deploy | ☐ |
-| README.md com instruções e prints | ☐ |
-| Documentação técnica com evidências (PDF ou PPT) | ☐ |
-| Deploy realizado nos ambientes staging e produção | ☐ |
+| Projeto compactado em .ZIP com estrutura organizada | ☑ |
+| Dockerfile funcional | ☑ |
+| docker-compose.yml ou arquivos Kubernetes | ☑ |
+| Pipeline com etapas de build, teste e deploy | ☑ |
+| README.md com instruções e prints | ☑ |
+| Documentação técnica com evidências (PDF ou PPT) | ☑ |
+| Deploy realizado nos ambientes staging e produção | ☑ |
