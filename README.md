@@ -1,6 +1,8 @@
 # Projeto - Cidades ESG Inteligentes
 
-API REST em **Java Spring Boot** para registrar e consultar **indicadores ESG** (Ambiental, Social e Governança) de cidades — por exemplo consumo de energia, taxa de coleta seletiva, treinamentos de inclusão ou conformidade ambiental. O projeto aplica práticas completas de DevOps: pipeline CI/CD, containerização com Docker e orquestração com Docker Compose, com deploy automatizado em **staging** e **produção**.
+API REST em **Java 21 + Spring Boot** para cadastrar e consultar **indicadores ESG** (Ambiental, Social e Governança) de cidades, como consumo de energia, coleta seletiva, acesso a saneamento ou transparência nos gastos públicos.
+
+O foco do projeto é aplicar as práticas de **DevOps** vistas na fase *"Navegando pelo mundo DevOps"*: pipeline de CI/CD com **GitHub Actions**, containerização com **Docker**, orquestração com **Docker Compose** e deploy automatizado em dois ambientes na nuvem **Microsoft Azure** (**staging** e **produção**).
 
 **Integrantes (Grupo 112):**
 
@@ -8,188 +10,197 @@ API REST em **Java Spring Boot** para registrar e consultar **indicadores ESG** 
 |------|----|
 | Sarah Schulze Bittar Bonafé | RM563780 |
 
+**Repositório:** https://github.com/SarahSBB-Dev/cidades-esg-inteligentes
+
 ## Estrutura do projeto
 
 ```
 cidades-esg-inteligentes/
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-├── pom.xml
+├── Dockerfile                         # imagem da aplicação (build com Maven + runtime com JRE 21)
+├── docker-compose.yml                 # orquestração local: API + MySQL
+├── .env.example                       # modelo das variáveis de ambiente do compose
+├── pom.xml                            # dependências e build (Maven)
 ├── scripts/
-│   ├── deploy.sh                  # pull da imagem + compose up + espera "healthy"
-│   └── smoke-test.sh              # testes pós-deploy (health, ambiente, API) + evidências
-├── docs/                          # documentação técnica (PDF)
-├── prints/                        # evidências de execução
+│   └── verificar-ambiente.sh          # verifica se o ambiente publicado está no ar
 ├── src/
-│   ├── main/java/br/com/fiap/esg/ # controller, service, repository, model
-│   ├── main/resources/application.properties
-│   └── test/java/br/com/fiap/esg/ # testes automatizados
+│   ├── main/java/br/com/fiap/esg/
+│   │   ├── controller/                # IndicadorEsgController e StatusController
+│   │   ├── service/                   # regras de negócio
+│   │   ├── repository/                # Spring Data JPA
+│   │   ├── model/                     # entidade IndicadorEsg e enum CategoriaEsg
+│   │   ├── dto/                       # records de cadastro e exibição
+│   │   ├── exception/                 # exceção de indicador não encontrado
+│   │   └── advice/                    # tratamento global de erros
+│   ├── main/resources/
+│   │   ├── application.properties     # configurações comuns
+│   │   ├── application-dev.properties # profile dev (local, MySQL do compose)
+│   │   ├── application-stg.properties # profile stg (staging no Azure)
+│   │   └── application-prd.properties # profile prd (produção no Azure)
+│   └── test/java/br/com/fiap/esg/     # testes automatizados (JUnit 5)
+├── prints/                            # evidências de funcionamento
+├── docs/                              # documentação técnica (PDF)
 └── .github/workflows/
-    ├── ci-cd.yml                  # pipeline principal
-    └── deploy.yml                 # deploy reutilizável (staging/produção)
+    └── ci-cd.yml                      # pipeline de CI/CD (GitHub Actions)
 ```
 
-## API
+## Endpoints da API
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| GET | `/api/indicadores` | Lista indicadores (filtro opcional `?categoria=AMBIENTAL\|SOCIAL\|GOVERNANCA`) |
-| GET | `/api/indicadores/{id}` | Busca um indicador |
-| POST | `/api/indicadores` | Cria um indicador |
+| GET | `/api/status` | Mostra se a aplicação está no ar e em qual ambiente (`dev`, `stg` ou `prd`) |
+| GET | `/api/indicadores` | Lista os indicadores (filtro opcional `?categoria=AMBIENTAL`, `SOCIAL` ou `GOVERNANCA`) |
+| GET | `/api/indicadores/{id}` | Busca um indicador pelo id |
+| POST | `/api/indicadores` | Cadastra um indicador |
 | PUT | `/api/indicadores/{id}` | Atualiza um indicador |
-| DELETE | `/api/indicadores/{id}` | Remove um indicador |
-| GET | `/actuator/health` | Estado da aplicação (usado no healthcheck) |
-| GET | `/actuator/info` | Mostra em qual ambiente a aplicação está (`local`, `staging`, `production`) |
+| DELETE | `/api/indicadores/{id}` | Exclui um indicador |
 
-Exemplo de corpo para `POST`/`PUT`:
+Exemplo de corpo para `POST` e `PUT`:
 
 ```json
 {
   "cidade": "São Paulo",
   "categoria": "AMBIENTAL",
-  "nome": "Consumo de energia",
-  "valor": 1250.5,
-  "unidade": "MWh",
-  "dataMedicao": "2026-09-01"
+  "nome": "Energia renovável na iluminação pública",
+  "valor": 78.5,
+  "unidade": "%",
+  "dataMedicao": "2026-10-01"
 }
 ```
 
 ## Como executar localmente com Docker
 
-Pré-requisitos: Docker e Docker Compose instalados.
+Pré-requisito: **Docker Desktop** instalado e em execução.
 
-```bash
-# 1. Crie o arquivo de variáveis de ambiente
-cp .env.example .env
+1. Clone o repositório e entre na pasta do projeto:
+   ```bash
+   git clone https://github.com/SarahSBB-Dev/cidades-esg-inteligentes.git
+   cd cidades-esg-inteligentes
+   ```
+2. Crie o arquivo `.env` a partir do modelo (no Windows use `copy .env.example .env`):
+   ```bash
+   cp .env.example .env
+   ```
+3. Construa a imagem e suba a API e o banco MySQL:
+   ```bash
+   docker compose up --build
+   ```
+4. Teste a aplicação (navegador, Insomnia ou curl):
+   - Status: http://localhost:8080/api/status → `"ambiente":"dev"`
+   - Indicadores: http://localhost:8080/api/indicadores
+5. Para parar os containers: `docker compose down` (use `docker compose down -v` para apagar também o volume do banco).
 
-# 2. Suba aplicação + banco (constrói a imagem na primeira vez)
-docker compose up -d --build
-
-# 3. Acompanhe os logs (opcional)
-docker compose logs -f app
-
-# 4. Teste
-curl http://localhost:8080/actuator/health
-curl -X POST http://localhost:8080/api/indicadores \
-  -H "Content-Type: application/json" \
-  -d '{"cidade":"São Paulo","categoria":"AMBIENTAL","nome":"Consumo de energia","valor":1250.5,"unidade":"MWh","dataMedicao":"2026-09-01"}'
-curl http://localhost:8080/api/indicadores
-
-# 5. Para encerrar (use -v para apagar também os volumes)
-docker compose down
-```
-
-Para rodar apenas os testes sem Docker (requer JDK 17 e Maven): `mvn verify`.
+Para rodar só os testes automatizados (precisa do JDK 21 e do Maven): `mvn test`.
 
 ## Pipeline CI/CD
 
-**Ferramenta:** GitHub Actions (`.github/workflows/`).
+**Ferramenta:** GitHub Actions, arquivo `.github/workflows/ci-cd.yml`.
 
-| # | Job | Quando roda | O que faz |
-|---|-----|-------------|-----------|
-| 1 | `build-test` | push e pull request | Configura JDK 17, compila e executa os testes (`mvn verify`); publica relatórios de teste e o JAR como artefatos |
-| 2 | `container-smoke` | após o job 1 | Sobe app + banco com `docker compose`, valida `/actuator/health` e cria/lista um indicador pela API |
-| 3 | `docker-publish` | push na `main` | Constrói a imagem e publica no GitHub Container Registry (`ghcr.io`) com as tags `sha-<commit>` e `latest` |
-| 4 | `deploy-staging` | após o job 3 | Deploy automático no environment **staging** + smoke test |
-| 5 | `deploy-production` | após staging OK | Deploy no environment **production** (mesma imagem) + smoke test; aceita aprovação manual |
+**Fluxo de branches:** o desenvolvimento acontece em branches `feature/*`, que são integradas na `develop` por pull request. A `develop` é publicada em **staging**. Depois de validada, a `develop` é mesclada na `main`, que é publicada em **produção**.
 
-**Lógica do pipeline:** cada job só roda se o anterior passou. Um build ou teste quebrado nunca gera imagem; uma imagem que falha no teste de container nunca é publicada; uma versão que falha em staging nunca chega à produção.
+| Etapa (job) | Quando roda | O que faz |
+|-------------|-------------|-----------|
+| 1. `build-test` - Build e testes | push e pull request em `develop` e `main` | Configura o Java 21, executa os **testes automatizados** (`mvn test`) e gera o `app.jar` (`mvn package`) |
+| 2. `docker` - Build e push da imagem | push em `develop` e `main` | Constrói a imagem a partir do `Dockerfile` e envia ao **Docker Hub** com as tags `<sha do commit>` e `latest` |
+| 3. `deploy-staging` - Deploy em staging | após a etapa 2 | Publica a imagem no Aplicativo Web de **staging** no Azure e roda `scripts/verificar-ambiente.sh` |
+| 4. `deploy-producao` - Deploy em produção | após a etapa 3, **somente na `main`** | Publica **a mesma imagem** no Aplicativo Web de **produção** e verifica se está no ar |
 
-**Funcionamento do deploy** (`deploy.yml`, workflow reutilizável chamado uma vez para cada ambiente):
+**Funcionamento:**
 
-1. O job declara o **GitHub Environment** do ambiente (`staging` ou `production`) — o GitHub registra cada deploy na aba *Deployments* do repositório e permite exigir aprovação manual em produção (*Required reviewers*).
-2. Gera um `.env` específico do ambiente: `APP_ENV`, `COMPOSE_PROJECT_NAME=cidades-esg-<ambiente>`, porta (8081 staging / 8082 produção), banco `esg_<ambiente>`, senha vinda do secret `DB_PASSWORD` do environment (ou gerada aleatoriamente) e a imagem `sha-<commit>` publicada no job 3.
-3. `scripts/deploy.sh`: faz login no GHCR (token via stdin), `docker compose pull`, `docker compose up -d --no-build` e espera o container ficar `healthy`.
-4. `scripts/smoke-test.sh`: valida `/actuator/health` = UP, confere em `/actuator/info` que a aplicação está no ambiente certo, cria (POST) e lista (GET) um indicador ESG. As respostas são gravadas no **resumo da execução** (evidências).
-5. Registra `docker compose ps` e os logs da aplicação no resumo e encerra o ambiente.
+- Cada etapa depende da anterior (`needs`). Se os testes falharem, nenhuma imagem é gerada. Se o deploy em staging falhar, a produção não é atualizada.
+- O deploy usa a action `azure/webapps-deploy` com o **perfil de publicação** de cada Aplicativo Web, guardado nos *secrets* do GitHub.
+- Os jobs de deploy usam os **environments** `staging` e `production` do GitHub, que registram cada implantação e mostram o link do ambiente.
+- A diferença entre os ambientes está só nas **variáveis de ambiente** configuradas em cada Aplicativo Web do Azure: `PROFILE=stg` ou `PROFILE=prd`.
+- Depois de cada deploy, o script `verificar-ambiente.sh` acessa `/api/status` até a aplicação responder com o ambiente correto. Isso confirma que a nova versão subiu.
 
-**Promoção de artefato:** staging e produção usam **a mesma imagem** (tag `sha-<commit>`); só as variáveis de ambiente mudam. **Rollback:** reexecutar o deploy com uma tag `sha-...` anterior.
+**Secrets configurados no repositório** (Settings → Secrets and variables → Actions):
 
-**Onde os ambientes rodam:** os ambientes staging e produção são provisionados pelo próprio pipeline em runners do GitHub Actions (hosts Linux com Docker), de forma efêmera — cada deploy sobe app + PostgreSQL, valida e registra as evidências. Os scripts são independentes do host: o mesmo `deploy.sh` pode ser executado em uma VM na nuvem (Azure, AWS etc.) via SSH para manter os ambientes permanentemente no ar.
+| Secret | Uso |
+|--------|-----|
+| `DOCKERHUB_USERNAME` | usuário do Docker Hub |
+| `DOCKERHUB_TOKEN` | token de acesso do Docker Hub |
+| `AZURE_PUBLISH_PROFILE_STAGING` | perfil de publicação do Aplicativo Web de staging |
+| `AZURE_PUBLISH_PROFILE_PRODUCAO` | perfil de publicação do Aplicativo Web de produção |
 
-### Configuração no GitHub (opcional)
+**Ambientes no Azure** (Serviços de Aplicativos, plano Básico B1, Linux, contêiner Docker):
 
-Os environments `staging` e `production` são criados automaticamente na primeira execução. Opcionalmente, em **Settings → Environments**:
-
-| Environment | Secret | Variable | Proteção |
-|-------------|--------|----------|----------|
-| `staging` | `DB_PASSWORD` | `APP_PORT` | — |
-| `production` | `DB_PASSWORD` | `APP_PORT` | **Required reviewers** (aprovação manual antes do deploy) |
+| Ambiente | Aplicativo Web | Variáveis de ambiente |
+|----------|----------------|-----------------------|
+| Staging | `cidades-esg-stg-rm563780` | `PROFILE=stg`, `WEBSITES_PORT=8080` |
+| Produção | `cidades-esg-prd-rm563780` | `PROFILE=prd`, `WEBSITES_PORT=8080` |
 
 ## Containerização
 
-**Dockerfile** (multi-stage):
+**Dockerfile:**
 
 ```dockerfile
-# ---------- Estágio 1: build ----------
-FROM maven:3.9-eclipse-temurin-17 AS build
-WORKDIR /app
-COPY pom.xml .
-RUN mvn -B -q dependency:go-offline
-COPY src ./src
-RUN mvn -B -q package -DskipTests
+# Etapa de build: usa uma imagem com o Maven e Java 21 para compilar o projeto
+FROM maven:3.9.8-eclipse-temurin-21 AS build
+RUN mkdir /opt/app
+COPY . /opt/app
+WORKDIR /opt/app
+RUN mvn clean package -DskipTests
 
-# ---------- Estágio 2: runtime ----------
-FROM eclipse-temurin:17-jre-alpine
-WORKDIR /app
-RUN addgroup -S esg && adduser -S esg -G esg \
-    && mkdir -p /app/logs && chown -R esg:esg /app
-USER esg
-COPY --from=build --chown=esg:esg /app/target/*.jar app.jar
+# Etapa de runtime: usa uma imagem leve com apenas o JRE para rodar o app
+FROM eclipse-temurin:21-jre-alpine
+RUN mkdir /opt/app
+COPY --from=build /opt/app/target/app.jar /opt/app/app.jar
+WORKDIR /opt/app
+ENV PROFILE=prd
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD wget -qO- http://localhost:8080/actuator/health || exit 1
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["sh", "-c", "java -Dspring.profiles.active=$PROFILE -jar app.jar"]
 ```
 
-**Estratégias adotadas**
+**Estratégias adotadas:**
 
-- **Multi-stage build:** o Maven e o código-fonte ficam só no primeiro estágio; a imagem final tem apenas o JRE e o JAR (menor e mais segura).
-- **Cache de dependências:** o `pom.xml` é copiado antes do `src`, então as dependências só são baixadas de novo quando o `pom.xml` muda.
-- **Usuário não-root:** a aplicação roda com o usuário `esg`.
-- **Healthcheck:** usa o Actuator; o compose só inicia a aplicação depois que o banco está saudável (`depends_on` com `service_healthy`).
+- **Build em duas etapas (multi-stage):** a primeira etapa usa a imagem do Maven para compilar e gerar o `app.jar`. A imagem final usa só o JRE 21 em Alpine, então fica menor e não leva o código-fonte nem o Maven.
+- **Profile por variável de ambiente:** a variável `PROFILE` define o profile do Spring (`dev`, `stg` ou `prd`). A mesma imagem roda em qualquer ambiente, mudando apenas a configuração.
+- **`.dockerignore`:** evita copiar para a imagem arquivos desnecessários, como `target/`, `.git/`, `.env`, prints e documentação.
+- **Testes fora da imagem:** os testes rodam no job de CI. Por isso o build da imagem usa `-DskipTests`.
 
-**Orquestração (`docker-compose.yml`)**
+**Orquestração com Docker Compose (`docker-compose.yml`):**
 
-- **Serviços:** `app` (Spring Boot) e `db` (PostgreSQL 16).
-- **Rede:** `esg-net` (bridge) — a aplicação acessa o banco pelo nome `db`; o banco não é publicado no host.
-- **Volumes:** `pgdata` (dados do PostgreSQL) e `applogs` (logs da aplicação) — os dados sobrevivem a recriações dos containers.
-- **Variáveis de ambiente:** definidas no `.env` (modelo em `.env.example`): `APP_ENV`, `APP_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `APP_IMAGE`, `COMPOSE_PROJECT_NAME`.
+- **Serviços:** `api` (aplicação Spring Boot, construída pelo Dockerfile) e `db` (MySQL 8.0).
+- **Volume:** `db_data`, que guarda os dados do MySQL mesmo se o container for recriado.
+- **Rede:** `esg-network` (bridge). A API acessa o banco pelo nome do serviço: `jdbc:mysql://db:3306/...`.
+- **Variáveis de ambiente:** vêm do arquivo `.env` (modelo em `.env.example`): `PROFILE`, `DB_NAME` e `DB_ROOT_PASSWORD`. A API recebe `DATABASE_URL`, `DATABASE_USER` e `DATABASE_PWD`.
+- **Healthcheck:** o MySQL é verificado com `mysqladmin ping`. A API só sobe depois que o banco está saudável (`depends_on` com `condition: service_healthy`).
+
+**Banco de dados por ambiente:**
+
+| Profile | Onde roda | Banco |
+|---------|-----------|-------|
+| `dev` | Docker Compose local | MySQL 8.0 (container `db`) |
+| `stg` | Azure - staging | H2 em memória (ou o banco informado na variável `DATABASE_URL`) |
+| `prd` | Azure - produção | H2 em memória (ou o banco informado na variável `DATABASE_URL`) |
+
+Nos ambientes do Azure usamos um banco em memória para não gerar custo extra na conta de estudante. Com isso, os dados são apagados quando o Aplicativo Web reinicia. Para manter os dados, basta criar um banco gerenciado e configurar `DATABASE_URL`, `DATABASE_USER` e `DATABASE_PWD` no Azure, sem alterar o código.
 
 ## Prints do funcionamento
 
-> Substitua os itens abaixo pelas imagens/links reais (salve as imagens em uma pasta `prints/` e referencie com `![descrição](prints/arquivo.png)`).
+As evidências ficam na pasta [`prints/`](prints/) e também estão na documentação em PDF (pasta [`docs/`](docs/)).
 
-- [ ] Pipeline executado com sucesso (aba **Actions**: build, testes, container-smoke, publish)
-- [ ] Relatório/logs dos testes automatizados
-- [ ] Imagem publicada no GitHub Container Registry
-- [ ] Aprovação manual do deploy em produção
-- [ ] Deploy em **staging** concluído + `/actuator/info` mostrando `"environment":"staging"`
-- [ ] Deploy em **produção** concluído + `/actuator/info` mostrando `"environment":"production"`
-- [ ] API funcionando (POST/GET em `/api/indicadores`) em staging e em produção
-- [ ] `docker compose ps` / `docker ps` com os containers `healthy`
-
-**URLs dos ambientes:** staging: _preencher_ · produção: _preencher_
+_(prints adicionados após a execução do pipeline)_
 
 ## Tecnologias utilizadas
 
-- **Linguagem/framework:** Java 17, Spring Boot 3.3 (Web, Data JPA, Validation, Actuator)
-- **Banco de dados:** PostgreSQL 16
-- **Testes:** JUnit 5, Mockito, Spring MockMvc (`@WebMvcTest`)
+- **Linguagem e framework:** Java 21, Spring Boot 3.3 (Spring Web, Spring Data JPA, Bean Validation)
+- **Banco de dados:** MySQL 8.0 (local, via Docker Compose) e H2 (ambientes no Azure)
+- **Testes:** JUnit 5 (`spring-boot-starter-test`)
 - **Build:** Maven
-- **Containerização/orquestração:** Docker (multi-stage), Docker Compose
-- **CI/CD:** GitHub Actions, GitHub Container Registry, GitHub Environments (aprovação manual em produção)
-- **Deploy:** GitHub Environments (staging/production) + Docker Compose; scripts Bash de deploy e smoke test
+- **Containerização e orquestração:** Docker e Docker Compose
+- **Registro de imagens:** Docker Hub
+- **CI/CD:** GitHub Actions (com environments `staging` e `production`)
+- **Nuvem:** Microsoft Azure - Serviços de Aplicativos (Aplicativo Web para contêineres)
+- **Versionamento:** Git e GitHub
 
 ## Checklist de entrega
 
 | Item | OK |
 |------|----|
-| Projeto compactado em .ZIP com estrutura organizada | ☑ |
-| Dockerfile funcional | ☑ |
-| docker-compose.yml ou arquivos Kubernetes | ☑ |
-| Pipeline com etapas de build, teste e deploy | ☑ |
-| README.md com instruções e prints | ☐ (inserir os prints) |
-| Documentação técnica com evidências (PDF ou PPT) | ☐ (inserir os prints e os integrantes) |
-| Deploy realizado nos ambientes staging e produção | ☐ (executar o pipeline) |
+| Projeto compactado em .ZIP com estrutura organizada | ☐ |
+| Dockerfile funcional | ☐ |
+| docker-compose.yml ou arquivos Kubernetes | ☐ |
+| Pipeline com etapas de build, teste e deploy | ☐ |
+| README.md com instruções e prints | ☐ |
+| Documentação técnica com evidências (PDF ou PPT) | ☐ |
+| Deploy realizado nos ambientes staging e produção | ☐ |
